@@ -1,0 +1,12 @@
+[project]
+name = "pydantic-lesson-03"
+version = "0.1.0"
+description = "Среда для практики Pydantic, Python Advanced — урок 3"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "flask>=3.1,<4",
+    "pydantic[email]>=2,<3",
+]
+
+[tool.uv]
+package = false
