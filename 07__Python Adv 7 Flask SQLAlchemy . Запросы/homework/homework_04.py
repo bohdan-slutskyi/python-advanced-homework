@@ -132,12 +132,13 @@ with Session() as session:
     print(f"Новая цена смартфона: {smartphone.price:.2f}")
 
     # Задача 4: считаем количество продуктов в каждой категории.
+    # Внешнее соединение сохраняет категории, в которых пока нет продуктов.
     product_counts = session.execute(
         select(
             Category.name,
             func.count(Product.id).label("product_count"),
         )
-        .join(Product, Product.category_id == Category.id)
+        .outerjoin(Product, Product.category_id == Category.id)
         .group_by(Category.id, Category.name)
         .order_by(Category.id)
     ).all()
@@ -152,7 +153,7 @@ with Session() as session:
             Category.name,
             func.count(Product.id).label("product_count"),
         )
-        .join(Product, Product.category_id == Category.id)
+        .outerjoin(Product, Product.category_id == Category.id)
         .group_by(Category.id, Category.name)
         .having(func.count(Product.id) > 1)
         .order_by(Category.id)
