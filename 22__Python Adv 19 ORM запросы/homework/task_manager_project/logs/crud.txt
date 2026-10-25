@@ -1,0 +1,22 @@
+REFERENCE (UTC): 2026-10-25T20:38:40.306924+00:00
+1. CREATE
+Prepare presentation | status=New | deadline=2026-10-28T20:38:40.306924+00:00
+description=Prepare materials and slides for the presentation
+Gather information | status=New | deadline=2026-10-27T20:38:40.306924+00:00
+description=Find necessary information for the presentation
+Create slides | status=New | deadline=2026-10-26T20:38:40.306924+00:00
+description=Create presentation slides
+2. READ
+Tasks, New: ['Prepare presentation']
+SubTasks, Done and overdue: []
+3. UPDATE
+Prepare presentation | status=In progress | deadline=2026-10-28T20:38:40.306924+00:00
+description=Prepare materials and slides for the presentation
+Gather information | status=New | deadline=2026-10-23T20:38:40.306924+00:00
+description=Find necessary information for the presentation
+Create slides | status=New | deadline=2026-10-26T20:38:40.306924+00:00
+description=Create and format presentation slides
+4. DELETE
+Deleted total=3; by model={'task_manager.SubTask': 2, 'task_manager.Task': 1}
+Remaining exercise records: Task=0, SubTask=0
+CRUD completed successfully.
