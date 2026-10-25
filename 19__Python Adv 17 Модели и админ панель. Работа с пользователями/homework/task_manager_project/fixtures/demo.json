@@ -1,0 +1,70 @@
+[
+{
+  "model": "task_manager.category",
+  "pk": 1,
+  "fields": {
+    "name": "Разработка"
+  }
+},
+{
+  "model": "task_manager.category",
+  "pk": 2,
+  "fields": {
+    "name": "Документация"
+  }
+},
+{
+  "model": "task_manager.task",
+  "pk": 1,
+  "fields": {
+    "title": "Создать каталог книг",
+    "description": "Разработать модели и административный интерфейс каталога книг.",
+    "status": "new",
+    "deadline": "2026-11-15T12:00:00Z",
+    "created_at": "2026-10-25T20:16:02.171Z",
+    "categories": [
+      1,
+      2
+    ]
+  }
+},
+{
+  "model": "task_manager.task",
+  "pk": 2,
+  "fields": {
+    "title": "Подготовить руководство пользователя",
+    "description": "Описать запуск проекта, работу с категориями и управление задачами.",
+    "status": "in_progress",
+    "deadline": "2026-11-20T15:00:00Z",
+    "created_at": "2026-10-25T20:16:12.153Z",
+    "categories": [
+      1,
+      2
+    ]
+  }
+},
+{
+  "model": "task_manager.subtask",
+  "pk": 1,
+  "fields": {
+    "title": "Описать модель книги",
+    "description": "Определить поля названия, автора и даты публикации.",
+    "task": 1,
+    "status": "done",
+    "deadline": "2026-11-10T10:00:00Z",
+    "created_at": "2026-10-25T20:16:21.067Z"
+  }
+},
+{
+  "model": "task_manager.subtask",
+  "pk": 2,
+  "fields": {
+    "title": "Написать инструкцию запуска",
+    "description": "Описать создание окружения, миграции и запуск сервера.",
+    "task": 2,
+    "status": "pending",
+    "deadline": "2026-11-18T14:00:00Z",
+    "created_at": "2026-10-25T20:16:26.452Z"
+  }
+}
+]
