@@ -1,0 +1,79 @@
+erDiagram
+    CUSTOM_USER ||--o{ USER_GROUP : belongs_to
+    DJANGO_GROUP ||--o{ USER_GROUP : includes
+    CUSTOM_USER ||--o{ LISTING : publishes
+    CUSTOM_USER ||--o{ BOOKING : requests
+    LISTING ||--o{ BOOKING : receives
+    BOOKING ||--o| REVIEW : reviewed_after_stay
+    CUSTOM_USER o|--o{ SEARCH_EVENT : searches
+    CUSTOM_USER o|--o{ VIEW_EVENT : views
+    LISTING ||--o{ VIEW_EVENT : viewed
+
+    CUSTOM_USER {
+        bigint id PK
+        string email UK
+        string display_name
+        string password_hash
+        boolean is_active
+        datetime date_joined
+    }
+    DJANGO_GROUP {
+        bigint id PK
+        string name UK
+    }
+    USER_GROUP {
+        bigint id PK
+        bigint user_id FK
+        bigint group_id FK
+    }
+    LISTING {
+        bigint id PK
+        bigint landlord_id FK
+        string title
+        text description
+        string country_code
+        string city
+        string district
+        string postal_code
+        string street
+        string house_number
+        string unit_number
+        string housing_type
+        int rooms
+        decimal price_per_night
+        boolean is_active
+        datetime deleted_at
+        datetime created_at
+        datetime updated_at
+    }
+    BOOKING {
+        bigint id PK
+        bigint listing_id FK
+        bigint tenant_id FK
+        date check_in
+        date check_out
+        string status
+        datetime cancelled_at
+        datetime created_at
+        datetime updated_at
+    }
+    REVIEW {
+        bigint id PK
+        bigint booking_id FK,UK
+        int rating
+        text comment
+        datetime created_at
+        datetime updated_at
+    }
+    SEARCH_EVENT {
+        bigint id PK
+        bigint user_id FK
+        string query_text
+        datetime created_at
+    }
+    VIEW_EVENT {
+        bigint id PK
+        bigint listing_id FK
+        bigint viewer_id FK
+        datetime created_at
+    }
