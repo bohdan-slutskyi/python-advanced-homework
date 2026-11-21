@@ -10,7 +10,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.bookings.models import Booking
-from apps.listings.models import Listing
+from apps.listings.models import City, Listing
 from apps.reviews.models import Review
 from apps.statistics.models import SearchEvent
 
@@ -34,7 +34,7 @@ class ModelReviewTests(TestCase):
             landlord=cls.owner,
             title="Test flat",
             description="Test description",
-            city="Hannover",
+            city=City.objects.get(name="Hannover"),
             postal_code="30159",
             street="Test Street",
             house_number="10",

@@ -25,7 +25,7 @@ class Review(models.Model):
         ]
 
     def clean(self):
-        """Eligibility is checked again by the future reviews API/service."""
+        """Eligibility is rechecked by the reviews service before saving."""
         super().clean()
         if self.booking_id:
             from apps.bookings.models import Booking
@@ -44,3 +44,6 @@ class Review(models.Model):
                     raise ValidationError(
                         {"booking": "A review is allowed only after checkout."}
                     )
+
+    def __str__(self):
+        return f"Review #{self.pk} · booking #{self.booking_id} · {self.rating}/5"

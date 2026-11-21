@@ -8,12 +8,18 @@ dependencies = [
     "djangorestframework>=3.16,<3.19",
     "djangorestframework-simplejwt>=5.5.1,<6",
     "drf-spectacular>=0.30,<0.31",
+    "gunicorn>=27.0.1,<28",
     "mysqlclient>=2.2.7,<3",
     "python-dotenv>=1.1,<2",
 ]
 
 [dependency-groups]
-dev = ["ruff>=0.14,<1", "pytest>=8,<10", "pytest-django>=4.11,<5"]
+dev = [
+    "ruff>=0.14,<1",
+    "pytest>=8,<10",
+    "pytest-django>=4.11,<5",
+    "faker>=37,<41",
+]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings"

@@ -6,6 +6,36 @@ from django.db import models
 from django.db.models import Q
 
 
+class City(models.Model):
+    """Controlled municipality catalogue; populated by migrations/admin."""
+
+    name = models.CharField(max_length=120, unique=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class District(models.Model):
+    """A district name is unique only inside its municipality."""
+
+    city = models.ForeignKey(City, on_delete=models.PROTECT, related_name="districts")
+    name = models.CharField(max_length=120)
+
+    class Meta:
+        ordering = ["city_id", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["city", "name"], name="district_city_name_uq"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.name}, {self.city.name}"
+
+
 class Listing(models.Model):
     class CountryCode(models.TextChoices):
         GERMANY = "DE", "Germany"
@@ -27,8 +57,21 @@ class Listing(models.Model):
         default=CountryCode.GERMANY,
         db_collation="utf8mb4_0900_bin",
     )
-    city = models.CharField(max_length=120)
-    district = models.CharField(max_length=120, blank=True)
+    city = models.ForeignKey(City, on_delete=models.PROTECT, related_name="listings")
+    district = models.ForeignKey(
+        District,
+        on_delete=models.PROTECT,
+        related_name="listings",
+        null=True,
+        blank=True,
+    )
+    # Exact pre-normalization values retained only for migration audit/rollback.
+    legacy_city = models.CharField(
+        max_length=120, blank=True, default="", editable=False
+    )
+    legacy_district = models.CharField(
+        max_length=120, blank=True, default="", editable=False
+    )
     postal_code = models.CharField(
         max_length=10,
         validators=[
@@ -77,6 +120,16 @@ class Listing(models.Model):
             ),
             models.Index(fields=["city", "district"], name="listing_city_district_idx"),
         ]
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        super().clean()
+        if self.district_id and self.city_id:
+            if not District.objects.filter(
+                pk=self.district_id, city_id=self.city_id
+            ).exists():
+                raise ValidationError({"district": "District must belong to city."})
 
     def __str__(self):
         return self.title

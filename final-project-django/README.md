@@ -1,41 +1,87 @@
-# Python Developer — Final Project (Django)
+# Аренда жилья — Django REST API
 
-Итоговый проект программы Python Developer, IT Career Hub, [LMS №271](https://lms.itcareerhub.de/course/view.php?id=271): REST backend аренды жилья на Django REST Framework и MySQL.
+Итоговый проект программы **Python Developer**, IT Career Hub,
+[LMS №271](https://lms.itcareerhub.de/course/view.php?id=271).
+Backend аренды жилья с **Django 5.2 LTS, Django REST Framework, MySQL 8.4,
+JWT**, пятью прикладными модулями и OpenAPI.
 
-## Реализовано на 17.11.2026
+## Реализованные возможности
 
-- Django 5.2.19 LTS, Python 3.14.10, DRF 3.18.3, SimpleJWT 5.5.1, mysqlclient 2.3.1; зафиксированы `pyproject.toml`, `uv.lock` и `.python-version`.
-- Пять приложений: `accounts`, `listings`, `bookings`, `reviews`, `statistics`. Custom User с email как логином создан в `accounts.0001_initial`; роли Tenant/Landlord представлены стандартными Django Groups через `accounts.0002_seed_groups`. Группы не взаимоисключающие.
-- Начальные модели Listing, Booking, Review, SearchEvent, ViewEvent по ER/3NF-схеме. Listing использует soft delete; Booking сохраняет полуоткрытые даты и статусы; Review связан с одной Booking. На MySQL применены миграции, проверены CHECK, UNIQUE, FK и составные индексы. Реализованы модельные валидаторы дат и отзывов, нормализация текста поиска, проверка немецкого почтового индекса, DB-ограничения Choices и регистрозависимая колляция для кодов страны, типа жилья и статусов.
-- Первый работающий API-сценарий: регистрация и вход, JWT refresh/logout с blacklist, защищённое создание/редактирование объявления владельцем, публичное чтение, включение и выключение видимости, мягкое удаление. Публичное получение неактивных и удалённых Listing запрещено; владелец видит собственное неактивное объявление.
-- OpenAPI: `GET /api/schema/`; Swagger UI: `GET /api/docs/`.
+| Модуль | Реализация |
+|---|---|
+| **Accounts** | Custom User, регистрация, JWT access/refresh/logout, Django Groups Tenant/Landlord, права на уровне объекта |
+| **Listings** | Создание, изменение и soft delete; активность; каталог, поиск, фильтры цены, комнат, типа жилья и географии; сортировка и пагинация |
+| **Bookings** | PENDING/CONFIRMED/REJECTED/CANCELLED; права арендатора и владельца; отмена до дня заезда; транзакционная защита от подтверждения пересекающихся периодов |
+| **Reviews** | Один отзыв (оценка 1–5) после завершённой подтверждённой брони; изменение собственного отзыва; агрегированный рейтинг |
+| **Statistics** | Приватные истории поисков и просмотров, публичные агрегаты, порог приватности для популярных запросов |
 
-## Реализованные HTTP-маршруты
+Данные нормализованы до **3NF**. География хранится в `City` и `District`
+с внешними ключами и уникальными парами (город, район). Публичный API
+использует строковые значения городов/районов с проверкой справочника.
+Цена `Booking.total_price` фиксируется при создании заявки и не изменяется
+после изменения тарифа объекта. MySQL CHECK контролирует
+`CANCELLED` → заполненный `cancelled_at`. Для периода проживания приняты
+лимиты `MAX_STAY_NIGHTS=365` и `MAX_ADVANCE_BOOKING_DAYS=365`.
 
-| Метод | Путь | Назначение |
-|---|---|---|
-| POST | `/api/auth/register/` | Регистрация с автоматическим назначением Tenant |
-| POST | `/api/auth/login/` | Получение access и refresh JWT |
-| POST | `/api/auth/refresh/` | Обновление access JWT |
-| POST | `/api/auth/logout/` | Отзыв принадлежащего пользователю refresh JWT |
-| GET | `/api/auth/me/` | Проверка текущего пользователя и access JWT |
-| GET | `/api/listings/`, `/api/listings/{id}/` | Публичный каталог и карточка |
-| POST | `/api/listings/` | Создание объявления членом Landlord |
-| PATCH | `/api/listings/{id}/` | Правка собственного объявления, в том числе `is_active` |
-| DELETE | `/api/listings/{id}/` | Soft delete собственного объявления |
+## Структура
 
-Landlord выдаётся только через доверенное управление Django Groups; публичного API повышения роли нет. JWT access остаётся действительным до своего срока истечения даже после blacklist refresh.
+- `config/` — настройки, маршруты, WSGI и ASGI;
+- `apps/accounts/`, `apps/listings/`, `apps/bookings/`, `apps/reviews/`, `apps/statistics/` — модели, API, сервисы, миграции;
+- `tests/` — модульные, API, интеграционные и конкурентные тесты MySQL;
+- `postman/` — коллекция **41 запрос / 8 папок**, шаблоны окружений и генератор;
+- `infra/` — сценарии HTTP, Docker/AWS EC2 Compose и конфигурация Nginx;
+- `docs/` — [ER/3NF](docs/architecture/er-model.md),
+  [архитектурные решения](docs/architecture/decisions.md),
+  [матрица требований](docs/requirements-matrix.md),
+  [целостность моделей](docs/model-integrity-2026-11-21.md);
+- `presentation/` — [навигатор вопросов](presentation/defense-navigator.md)
+  и [сценарий показа](presentation/demo-runbook.md).
 
-## Фактическая проверка
+API описан автоматически: `GET /api/schema/` и `GET /api/docs/`.
 
-На локальном сервере MySQL **26.10.0**, InnoDB, `utf8mb4_0900_ai_ci` для таблиц/email и `utf8mb4_0900_bin` для полей Choices успешно применены миграции пяти приложений и Django/JWT; соединение работает в режиме `READ-COMMITTED`. Проверены ограничения дат, цены, числа комнат, рейтинга, уникальность email и Review.booking, исторические FK и индексы.
+## Локальный запуск
 
-**21 автоматический тест и 15 параметризованных проверок прошли на MySQL**; дополнительно выполнены `manage.py check`, `makemigrations --check --dry-run`, `ruff check`, `ruff format --check` и валидация OpenAPI. Проведён реальный HTTP smoke-тест с кодами 201/200/404/204: регистрация → вход → объявление → скрытие → восстановление видимости → выход.
+Docker Compose использует MySQL 8.4 и Django в локальном контейнере;
+на AWS применяется Gunicorn/Nginx. Конфигурация переменных задаётся через
+исключённый из Git файл `.env` на основе [шаблона](.env.example).
+В исходных файлах нет реальных паролей и токенов.
 
-Воспроизводимость зависимостей обеспечена `uv.lock`. `.env.example` содержит только шаблон, `.env` и секреты в Git отсутствуют. Подключение к MySQL задаётся переменными окружения. Отдельная конфигурация пользователя БД с минимальными правами для развёртывания ещё не подготовлена.
+```bash
+docker compose config --quiet
+docker compose up -d --build
+docker compose ps
+python3 infra/smoke_container.py
+docker compose --profile test run --rm tests
+```
 
-## Следующие этапы и ограничения
+При запуске веб-контейнера выполняются миграции. Для демонстрационных данных
+реализован `manage.py seed_demo` с Faker; отдельный HTTP-сценарий
+`infra/demo_flow.py` проверяет регистрацию, роли, бронирования,
+отзывы и статистику. Подробности: [Docker](docs/container-run.md) и
+[сценарий демонстрации](presentation/demo-runbook.md).
 
-API создания/подтверждения/отмены бронирований, защита от конкурирующих подтверждений, отзывы после завершённого проживания, поиск/фильтры/сортировка, аналитические события, Faker/Postman, Docker и развёртывание пока **не реализованы**. `Booking.clean()`, `Review.clean()` и `SearchEvent.clean()` проверяют модельные правила при явном `full_clean()`, но **обычный `save()` не вызывает `full_clean()` автоматически**: в API-сервисах будет предусмотрен явный вызов валидации. Для подтверждения бронирований запланированы транзакции с `SELECT FOR UPDATE` и конкурентный тест на MySQL.
+## Фактические проверки
 
-Источники требований и решения D01–D14: [матрица](docs/requirements-matrix.md), [ER/3NF](docs/architecture/er-model.md), [диаграмма](docs/architecture/er-diagram.mmd), [решения](docs/architecture/decisions.md), [проверка моделей](docs/architecture/model-review.md).
+- **21.11.2026:** **91/91 Django unit/API/integration-тестов PASS на
+  локальной MySQL**, включая конкурентные `TransactionTestCase`,
+  проверку MySQL CHECK, строкового API, цены брони и воспроизводимость Postman.
+- Миграции `listings.0004` и `bookings.0004` проверены на полной копии
+  базы и применены к локальной Homebrew MySQL без потери 130 объявлений
+  и 257 бронирований; `manage.py check`,
+  `makemigrations --check --dry-run`, `migrate --check`, OpenAPI,
+  Ruff — успешно.
+- **18–19.11.2026:** Docker/MySQL — 84/84 теста, HTTP smoke 5/5;
+  сквозной HTTP-сценарий — 60/60; прежние Postman проверки
+  `Search & Filters` — 8/8.
+- **19.11.2026:** AWS EC2 R25 был развёрнут и проверен
+  (16 публичных HTTP assertions и 68 через защищённый SSH-forward);
+  после проверки тот же EC2 остановлен с сохранённым EBS/MySQL.
+  Обновление AWS схемой от 21.11 описано отдельно, не представляется
+  как уже выполненное.
+
+Постоянная база данных и тестовая БД разделены. В истории старых данных
+сохранены исходные строки географии; неподтверждённые районы не
+приписываются произвольным городам. Стоимости исторических бронирований
+без известного исходного тарифа остаются NULL; новые заявки получают
+зафиксированную полную цену. Результат полного нового Postman Runner и
+контейнерной регрессии для схемы 21.11 пока не заявлен.

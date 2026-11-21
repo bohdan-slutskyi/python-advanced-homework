@@ -83,6 +83,9 @@ DATABASES = {
         },
     }
 }
+if os.getenv("MYSQL_SSL_REQUIRED", "false").lower() == "true":
+    DATABASES["default"]["OPTIONS"]["ssl"] = True
+
 AUTH_USER_MODEL = "accounts.User"
 
 AUTH_PASSWORD_VALIDATORS = [

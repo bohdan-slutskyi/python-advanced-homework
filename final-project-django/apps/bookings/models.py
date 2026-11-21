@@ -6,6 +6,9 @@ from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 
+MAX_STAY_NIGHTS = 365
+MAX_ADVANCE_BOOKING_DAYS = 365
+
 
 class Booking(models.Model):
     class Status(models.TextChoices):
@@ -28,6 +31,10 @@ class Booking(models.Model):
         default=Status.PENDING,
         db_collation="utf8mb4_0900_bin",
     )
+    # NULL denotes an imported legacy booking with no reliable historical price.
+    total_price = models.DecimalField(
+        max_digits=13, decimal_places=2, null=True, blank=True
+    )
     cancelled_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -44,6 +51,14 @@ class Booking(models.Model):
                     status__in=("PENDING", "CONFIRMED", "REJECTED", "CANCELLED")
                 ),
                 name="booking_status_allowed",
+            ),
+            models.CheckConstraint(
+                condition=~Q(status="CANCELLED") | Q(cancelled_at__isnull=False),
+                name="booking_cancelled_has_timestamp",
+            ),
+            models.CheckConstraint(
+                condition=Q(total_price__gt=0) | Q(total_price__isnull=True),
+                name="booking_total_price_positive",
             ),
         ]
         indexes = [
@@ -62,13 +77,15 @@ class Booking(models.Model):
             today = timezone.localdate()
             if self.check_out <= self.check_in:
                 errors["check_out"] = "Checkout must follow check-in."
-            elif (self.check_out - self.check_in).days > 365:
-                errors["check_out"] = "A stay cannot exceed 365 nights."
+            elif (self.check_out - self.check_in).days > MAX_STAY_NIGHTS:
+                errors["check_out"] = f"A stay cannot exceed {MAX_STAY_NIGHTS} nights."
             if self._state.adding and self.status == self.Status.PENDING:
                 if self.check_in < today:
                     errors["check_in"] = "Check-in cannot be in the past."
-                elif self.check_in > today + timedelta(days=365):
-                    errors["check_in"] = "Check-in cannot be more than 365 days ahead."
+                elif self.check_in > today + timedelta(days=MAX_ADVANCE_BOOKING_DAYS):
+                    errors["check_in"] = (
+                        f"Check-in cannot be more than {MAX_ADVANCE_BOOKING_DAYS} days ahead."
+                    )
 
         if (
             self._state.adding
@@ -91,3 +108,6 @@ class Booking(models.Model):
                     )
         if errors:
             raise ValidationError(errors)
+
+    def __str__(self):
+        return f"Booking #{self.pk} · listing #{self.listing_id} · {self.status}"

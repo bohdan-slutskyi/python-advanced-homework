@@ -8,7 +8,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from apps.bookings.models import Booking
-from apps.listings.models import Listing
+from apps.listings.models import City, District, Listing
 from apps.reviews.models import Review
 
 User = get_user_model()
@@ -207,7 +207,17 @@ class ListingsAPITests(TestCase):
             self.assertEqual(response.status_code, 400, response.data)
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
-                Listing.objects.create(landlord=self.owner, **{**LISTING, "rooms": 0})
+                Listing.objects.create(
+                    landlord=self.owner,
+                    **{
+                        **LISTING,
+                        "rooms": 0,
+                        "city": City.objects.get(name="Hannover"),
+                        "district": District.objects.get(
+                            city__name="Hannover", name="Mitte"
+                        ),
+                    },
+                )
 
 
 class OpenAPITests(TestCase):
@@ -234,7 +244,14 @@ class SchemaTests(TestCase):
             display_name="Guest",
             password=PASSWORD,
         )
-        cls.listing = Listing.objects.create(landlord=cls.owner, **LISTING)
+        cls.listing = Listing.objects.create(
+            landlord=cls.owner,
+            **{
+                **LISTING,
+                "city": City.objects.get(name="Hannover"),
+                "district": District.objects.get(city__name="Hannover", name="Mitte"),
+            },
+        )
 
     def test_booking_date_check_is_database_constraint(self):
         today = date.today()

@@ -1,6 +1,9 @@
 erDiagram
     CUSTOM_USER ||--o{ USER_GROUP : belongs_to
     DJANGO_GROUP ||--o{ USER_GROUP : includes
+    CITY ||--o{ DISTRICT : contains
+    CITY ||--o{ LISTING : located_in
+    DISTRICT o|--o{ LISTING : optional_district
     CUSTOM_USER ||--o{ LISTING : publishes
     CUSTOM_USER ||--o{ BOOKING : requests
     LISTING ||--o{ BOOKING : receives
@@ -26,14 +29,25 @@ erDiagram
         bigint user_id FK
         bigint group_id FK
     }
+    CITY {
+        bigint id PK
+        string name UK
+    }
+    DISTRICT {
+        bigint id PK
+        bigint city_id FK
+        string name
+    }
     LISTING {
         bigint id PK
         bigint landlord_id FK
         string title
         text description
         string country_code
-        string city
-        string district
+        bigint city_id FK
+        bigint district_id FK
+        string legacy_city
+        string legacy_district
         string postal_code
         string street
         string house_number
@@ -53,6 +67,7 @@ erDiagram
         date check_in
         date check_out
         string status
+        decimal total_price
         datetime cancelled_at
         datetime created_at
         datetime updated_at
