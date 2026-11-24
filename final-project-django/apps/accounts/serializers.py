@@ -4,12 +4,20 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 User = get_user_model()
 
 
 class RegisterSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, style={"input_type": "password"})
+    password = serializers.CharField(
+        write_only=True, trim_whitespace=False, style={"input_type": "password"}
+    )
+
+    def validate_password(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("Password cannot be blank.")
+        return value
 
     class Meta:
         model = User
@@ -43,6 +51,14 @@ class RegisterSerializer(serializers.ModelSerializer):
                 {"email": "An account with this email already exists."}
             ) from exc
         return user
+
+
+class LoginSerializer(TokenObtainPairSerializer):
+    """Use the password exactly as supplied, consistently with Django auth."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["password"].trim_whitespace = False
 
 
 class LogoutSerializer(serializers.Serializer):

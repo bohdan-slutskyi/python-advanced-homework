@@ -3,16 +3,23 @@ from rest_framework import serializers
 from .models import City, District, Listing
 
 
+class DistrictNameField(serializers.CharField):
+    def to_representation(self, value):
+        return value.name
+
+
 class ListingSerializer(serializers.ModelSerializer):
     landlord_id = serializers.IntegerField(read_only=True)
     # Preserve the existing string-based API while the DB stores FKs.
     city = serializers.CharField(max_length=120)
-    district = serializers.CharField(
+    district = DistrictNameField(
         max_length=120, required=False, allow_blank=True, allow_null=True
     )
 
     class Meta:
         model = Listing
+        # Do not silently trim spaces/newlines before strict postal validation.
+        extra_kwargs = {"postal_code": {"trim_whitespace": False}}
         fields = [
             "id",
             "landlord_id",
@@ -42,6 +49,7 @@ class ListingSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         city_name = attrs.pop("city", None)
+        district_provided = "district" in attrs
         district_name = attrs.pop("district", None)
         city = self.instance.city if self.instance else None
         if city_name is not None:
@@ -53,8 +61,8 @@ class ListingSerializer(serializers.ModelSerializer):
             attrs["city"] = city
         if city is None:
             raise serializers.ValidationError({"city": "This field is required."})
-        if district_name is not None:
-            if not district_name.strip():
+        if district_provided:
+            if district_name is None or not district_name.strip():
                 attrs["district"] = None
             else:
                 district = District.objects.filter(
@@ -69,12 +77,14 @@ class ListingSerializer(serializers.ModelSerializer):
             # Switching city must never silently preserve a district from old city.
             if self.instance.district_id is not None:
                 raise serializers.ValidationError(
-                    {"district": "Specify a district of the new city or empty string."}
+                    {
+                        "district": "Specify a district of the new city, null or empty string."
+                    }
                 )
         return attrs
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
         # Keep the public contract as a plain district name, not District.__str__.
-        data["district"] = instance.district.name if instance.district_id else ""
+        data["district"] = data["district"] or ""
         return data

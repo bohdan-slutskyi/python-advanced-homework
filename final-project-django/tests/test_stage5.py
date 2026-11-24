@@ -7,7 +7,6 @@ from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import connection
-from django.db.models import Count
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
@@ -17,6 +16,7 @@ from apps.bookings.models import Booking
 from apps.listings.models import Listing
 from apps.reviews.models import Review
 from apps.statistics.models import SearchEvent, ViewEvent
+from apps.statistics.retention import with_recent_view_count
 
 
 class StageFiveTest(TestCase):
@@ -77,6 +77,49 @@ class StageFiveTest(TestCase):
         )
         for landlord in User.objects.filter(email__contains="-landlord-"):
             self.assertTrue(landlord.groups.filter(name="Landlord").exists())
+
+    def test_seed_repeatable_after_normal_duplicate_searches_and_views(self):
+        self.seed()
+        user = get_user_model().objects.get(
+            email="demo-51271-tenant-00000@example.invalid"
+        )
+        listing = Listing.objects.get(title="[DEMO 51271] Listing 00000")
+        client = APIClient()
+        client.force_authenticate(user)
+        for _ in range(2):
+            self.assertEqual(
+                client.get(
+                    "/api/listings/", {"search": "demo-51271 city-0"}
+                ).status_code,
+                200,
+            )
+            self.assertEqual(
+                client.get(f"/api/listings/{listing.pk}/").status_code, 200
+            )
+        self.assertEqual(
+            SearchEvent.objects.filter(
+                user=user, query_text="demo-51271 city-0"
+            ).count(),
+            3,
+        )
+        self.assertEqual(
+            ViewEvent.objects.filter(viewer=user, listing=listing).count(), 3
+        )
+        models = (get_user_model(), Listing, Booking, Review, SearchEvent, ViewEvent)
+        before = [list(model.objects.order_by("pk").values()) for model in models]
+        second = self.seed()
+        for name in (
+            "users",
+            "listings",
+            "bookings",
+            "reviews",
+            "search_events",
+            "view_events",
+        ):
+            self.assertIn(f"{name}=0 new", second)
+        self.assertEqual(
+            [list(model.objects.order_by("pk").values()) for model in models], before
+        )
 
     def test_invalid_seed_arguments_write_nothing(self):
         with self.assertRaises(CommandError):
@@ -153,11 +196,9 @@ class StageFiveTest(TestCase):
 
     def test_mysql_explain_shape_for_popular_listings(self):
         self.seed()
-        qs = (
+        qs = with_recent_view_count(
             Listing.objects.filter(is_active=True, deleted_at__isnull=True)
-            .annotate(view_count=Count("view_events"))
-            .order_by("-view_count", "-id")
-        )
+        ).order_by("-view_count", "-id")
         plan = qs.explain()
         self.assertTrue(plan.strip())
         self.assertIn("listings_listing", plan)

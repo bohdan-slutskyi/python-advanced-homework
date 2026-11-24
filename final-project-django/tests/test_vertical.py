@@ -2,13 +2,14 @@ from datetime import date, timedelta
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
 from django.test import TestCase
 from rest_framework.test import APIClient
 
 from apps.bookings.models import Booking
-from apps.listings.models import City, District, Listing
+from apps.listings.models import MAX_ROOMS, City, District, Listing
 from apps.reviews.models import Review
 
 User = get_user_model()
@@ -65,6 +66,81 @@ class AccountAPITests(TestCase):
         self.assertCountEqual(
             user.groups.values_list("name", flat=True), ["Tenant", "Landlord"]
         )
+
+    def test_password_whitespace_is_preserved_exactly(self):
+        padded = f"  {PASSWORD}  "
+        response = self.register(password=padded)
+        self.assertEqual(response.status_code, 201, response.data)
+        user = User.objects.get(pk=response.data["id"])
+        self.assertTrue(user.check_password(padded))
+        self.assertFalse(user.check_password(PASSWORD))
+        self.assertNotIn("password", response.data)
+        for value, status in ((PASSWORD, 401), (padded, 200)):
+            result = self.client.post(
+                "/api/auth/login/", {"email": user.email, "password": value}
+            )
+            self.assertEqual(result.status_code, status)
+        self.assertEqual(
+            self.register("blank@example.invalid", password=" " * 12).status_code, 400
+        )
+
+    def test_legacy_and_manager_passwords_keep_original_exact_values(self):
+        # Old registration normalized its input before hashing it. The saved
+        # normalized password remains valid; padded input is no longer accepted.
+        legacy = User.objects.create_user(
+            email="legacy@example.invalid", display_name="Legacy", password=PASSWORD
+        )
+        padded = f" {PASSWORD} "
+        manager_user = User.objects.create_user(
+            email="manager-created@example.invalid",
+            display_name="Manager-created",
+            password=padded,
+        )
+        for user, correct, incorrect in (
+            (legacy, PASSWORD, padded),
+            (manager_user, padded, PASSWORD),
+        ):
+            original_hash = user.password
+            for value, status in ((incorrect, 401), (correct, 200)):
+                result = self.client.post(
+                    "/api/auth/login/", {"email": user.email, "password": value}
+                )
+                self.assertEqual(result.status_code, status)
+            user.refresh_from_db()
+            self.assertEqual(user.password, original_hash)
+
+    def test_login_openapi_matches_actual_response(self):
+        self.assertEqual(self.register().status_code, 201)
+        schema_response = self.client.get("/api/schema/")
+        self.assertEqual(schema_response.status_code, 200)
+        schema = schema_response.data
+        operation = schema["paths"]["/api/auth/login/"]["post"]
+
+        def resolve(value):
+            if "$ref" in value:
+                return schema["components"]["schemas"][value["$ref"].split("/")[-1]]
+            return value
+
+        request = resolve(
+            operation["requestBody"]["content"]["application/json"]["schema"]
+        )
+        response = resolve(
+            operation["responses"]["200"]["content"]["application/json"]["schema"]
+        )
+        self.assertEqual(set(request["properties"]), {"email", "password"})
+        self.assertTrue(request["properties"]["password"]["writeOnly"])
+        self.assertEqual(set(response["properties"]), {"access", "refresh"})
+        self.assertEqual(set(response["required"]), {"access", "refresh"})
+        login = self.client.post(
+            "/api/auth/login/", {"email": "tenant@example.com", "password": PASSWORD}
+        )
+        self.assertEqual(login.status_code, 200)
+        self.assertEqual(set(login.data), set(response["properties"]))
+        for field, value in login.data.items():
+            self.assertEqual(response["properties"][field]["type"], "string")
+            self.assertFalse(response["properties"][field].get("writeOnly", False))
+            self.assertIsInstance(value, str)
+            self.assertTrue(value)
 
     def test_login_logout_own_refresh_blacklist_and_access_lifetime(self):
         self.assertEqual(self.register().status_code, 201)
@@ -130,6 +206,44 @@ class ListingsAPITests(TestCase):
         group = Group.objects.get(name="Landlord")
         self.owner.groups.add(group)
         self.other.groups.add(group)
+
+    def test_room_limit_model_api_and_database(self):
+        self.client.force_authenticate(self.owner)
+        self.assertEqual(MAX_ROOMS, 100)
+        for rooms in (0, MAX_ROOMS + 1):
+            result = self.client.post(
+                "/api/listings/", {**LISTING, "rooms": rooms}, format="json"
+            )
+            self.assertEqual(result.status_code, 400, result.data)
+            self.assertIn("rooms", result.data)
+        result = self.client.post(
+            "/api/listings/", {**LISTING, "rooms": MAX_ROOMS}, format="json"
+        )
+        self.assertEqual(result.status_code, 201, result.data)
+        listing = Listing.objects.get(pk=result.data["id"])
+        self.assertEqual(listing.rooms, MAX_ROOMS)
+        self.assertTrue(listing.is_active)
+        listing.full_clean()
+        for rooms in (0, MAX_ROOMS + 1):
+            listing.rooms = rooms
+            with self.assertRaises(ValidationError) as caught:
+                listing.full_clean()
+            self.assertIn("rooms", caught.exception.message_dict)
+            with self.assertRaises(IntegrityError), transaction.atomic():
+                Listing.objects.filter(pk=listing.pk).update(rooms=rooms)
+            self.assertEqual(
+                self.client.patch(
+                    f"/api/listings/{listing.pk}/", {"rooms": rooms}
+                ).status_code,
+                400,
+            )
+            listing.refresh_from_db()
+            self.assertEqual(listing.rooms, MAX_ROOMS)
+        # Search ranges are not write constraints.
+        for params, count in (({"rooms_max": 101}, 1), ({"rooms_min": 101}, 0)):
+            response = self.client.get("/api/listings/", params)
+            self.assertEqual(response.status_code, 200, response.data)
+            self.assertEqual(response.data["count"], count)
 
     def test_only_landlord_creates_and_cannot_spoof_owner(self):
         self.assertEqual(self.client.post("/api/listings/", LISTING).status_code, 401)

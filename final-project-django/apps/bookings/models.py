@@ -5,27 +5,38 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 MAX_STAY_NIGHTS = 365
 MAX_ADVANCE_BOOKING_DAYS = 365
 
 
+class BookingStatus(models.TextChoices):
+    PENDING = "PENDING", _("Pending")
+    CONFIRMED = "CONFIRMED", _("Confirmed")
+    REJECTED = "REJECTED", _("Rejected")
+    CANCELLED = "CANCELLED", _("Cancelled")
+
+
 class Booking(models.Model):
-    class Status(models.TextChoices):
-        PENDING = "PENDING", "Pending"
-        CONFIRMED = "CONFIRMED", "Confirmed"
-        REJECTED = "REJECTED", "Rejected"
-        CANCELLED = "CANCELLED", "Cancelled"
+    Status = BookingStatus
 
     listing = models.ForeignKey(
-        "listings.Listing", on_delete=models.PROTECT, related_name="bookings"
+        "listings.Listing",
+        on_delete=models.PROTECT,
+        related_name="bookings",
+        verbose_name=_("listing"),
     )
     tenant = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="bookings"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="bookings",
+        verbose_name=_("tenant"),
     )
-    check_in = models.DateField()
-    check_out = models.DateField()
+    check_in = models.DateField(_("check-in"))
+    check_out = models.DateField(_("check-out"))
     status = models.CharField(
+        _("status"),
         max_length=16,
         choices=Status.choices,
         default=Status.PENDING,
@@ -33,13 +44,15 @@ class Booking(models.Model):
     )
     # NULL denotes an imported legacy booking with no reliable historical price.
     total_price = models.DecimalField(
-        max_digits=13, decimal_places=2, null=True, blank=True
+        _("total price"), max_digits=13, decimal_places=2, null=True, blank=True
     )
-    cancelled_at = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    cancelled_at = models.DateTimeField(_("cancelled at"), null=True, blank=True)
+    created_at = models.DateTimeField(_("created at"), auto_now_add=True)
+    updated_at = models.DateTimeField(_("updated at"), auto_now=True)
 
     class Meta:
+        verbose_name = _("booking")
+        verbose_name_plural = _("bookings")
         ordering = ["-created_at", "-id"]
         constraints = [
             models.CheckConstraint(
@@ -47,14 +60,18 @@ class Booking(models.Model):
                 name="booking_dates_valid",
             ),
             models.CheckConstraint(
-                condition=Q(
-                    status__in=("PENDING", "CONFIRMED", "REJECTED", "CANCELLED")
-                ),
+                condition=Q(status__in=tuple(BookingStatus.values)),
                 name="booking_status_allowed",
             ),
             models.CheckConstraint(
-                condition=~Q(status="CANCELLED") | Q(cancelled_at__isnull=False),
-                name="booking_cancelled_has_timestamp",
+                condition=Q(
+                    status=BookingStatus.CANCELLED.value, cancelled_at__isnull=False
+                )
+                | (
+                    ~Q(status=BookingStatus.CANCELLED.value)
+                    & Q(cancelled_at__isnull=True)
+                ),
+                name="booking_cancelled_timestamp_matches",
             ),
             models.CheckConstraint(
                 condition=Q(total_price__gt=0) | Q(total_price__isnull=True),
@@ -80,8 +97,8 @@ class Booking(models.Model):
             elif (self.check_out - self.check_in).days > MAX_STAY_NIGHTS:
                 errors["check_out"] = f"A stay cannot exceed {MAX_STAY_NIGHTS} nights."
             if self._state.adding and self.status == self.Status.PENDING:
-                if self.check_in < today:
-                    errors["check_in"] = "Check-in cannot be in the past."
+                if self.check_in <= today:
+                    errors["check_in"] = _("Check-in must be in the future.")
                 elif self.check_in > today + timedelta(days=MAX_ADVANCE_BOOKING_DAYS):
                     errors["check_in"] = (
                         f"Check-in cannot be more than {MAX_ADVANCE_BOOKING_DAYS} days ahead."

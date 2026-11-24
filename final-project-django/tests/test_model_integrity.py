@@ -2,11 +2,12 @@
 
 from datetime import timedelta
 from decimal import Decimal
+from unittest import skipUnless
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -72,7 +73,10 @@ class ModelIntegrityTests(TestCase):
         self.assertEqual(result.data["results"][0]["district"], "Mitte")
         self.assertNotIn("legacy_city", result.data["results"][0])
 
-    def test_city_scoped_districts_and_unique_names(self):
+    @skipUnless(
+        connection.vendor == "mysql", "MySQL case-insensitive geography collation"
+    )
+    def test_mysql_case_insensitive_unique_geography_names(self):
         self.assertNotEqual(self.mitte_berlin.pk, self.mitte_hannover.pk)
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
@@ -80,6 +84,9 @@ class ModelIntegrityTests(TestCase):
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
                 District.objects.create(city=self.berlin, name="MITTE")
+
+    def test_city_scoped_district_rejects_wrong_city(self):
+        self.assertNotEqual(self.mitte_berlin.pk, self.mitte_hannover.pk)
         listing = Listing(
             landlord=self.owner,
             title="Wrong district",

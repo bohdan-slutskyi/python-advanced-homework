@@ -197,14 +197,18 @@ class Command(BaseCommand):
                 tenant = tenants[i % tenants_n]
                 listing = listings[(i // tenants_n) % listings_n]
                 query = f"demo-{seed} city-{i // tenants_n}"
-                _, created = SearchEvent.objects.get_or_create(
+                # These are append-only event logs, not unique user/query or
+                # viewer/listing pairs. Existing duplicates are legitimate.
+                if not SearchEvent.objects.filter(
                     user=tenant, query_text=query
-                )
-                counts["search_events"] += int(created)
-                _, created = ViewEvent.objects.get_or_create(
+                ).exists():
+                    SearchEvent.objects.create(user=tenant, query_text=query)
+                    counts["search_events"] += 1
+                if not ViewEvent.objects.filter(
                     viewer=tenant, listing=listing
-                )
-                counts["view_events"] += int(created)
+                ).exists():
+                    ViewEvent.objects.create(viewer=tenant, listing=listing)
+                    counts["view_events"] += 1
         self.stdout.write(
             self.style.SUCCESS(
                 f"Synthetic seed={seed}: "

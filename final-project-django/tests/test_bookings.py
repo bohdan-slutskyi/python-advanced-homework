@@ -111,6 +111,7 @@ class BookingAPITests(TestCase):
         today = timezone.localdate()
         invalid = (
             (today - timedelta(days=1), today + timedelta(days=2)),
+            (today, today + timedelta(days=1)),
             (self.start, self.start),
             (self.start, self.start - timedelta(days=1)),
             (today + timedelta(days=366), today + timedelta(days=367)),
@@ -122,12 +123,13 @@ class BookingAPITests(TestCase):
                 self.assertEqual(response.status_code, 400, response.data)
         self.assertEqual(Booking.objects.count(), 0)
 
-    def test_dates_today_365_nights_and_horizon_boundary(self):
+    def test_dates_tomorrow_365_nights_and_horizon_boundary(self):
         self.auth(self.tenant)
         today = timezone.localdate()
         self.assertEqual(
             self.create(
-                check_in=today, check_out=today + timedelta(days=365)
+                check_in=today + timedelta(days=1),
+                check_out=today + timedelta(days=366),
             ).status_code,
             201,
         )

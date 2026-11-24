@@ -1,4 +1,4 @@
-from drf_spectacular.utils import extend_schema, inline_serializer
+from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
 from rest_framework import generics, permissions, serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -7,7 +7,7 @@ from rest_framework_simplejwt.settings import api_settings
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from .serializers import LogoutSerializer, RegisterSerializer
+from .serializers import LoginSerializer, LogoutSerializer, RegisterSerializer
 
 
 class RegisterView(generics.CreateAPIView):
@@ -16,7 +16,22 @@ class RegisterView(generics.CreateAPIView):
     authentication_classes = []
 
 
+@extend_schema_view(
+    post=extend_schema(
+        request=LoginSerializer,
+        responses={
+            200: inline_serializer(
+                name="LoginTokenPair",
+                fields={
+                    "access": serializers.CharField(),
+                    "refresh": serializers.CharField(),
+                },
+            )
+        },
+    )
+)
 class LoginView(TokenObtainPairView):
+    serializer_class = LoginSerializer
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
 

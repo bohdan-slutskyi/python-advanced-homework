@@ -2,8 +2,10 @@
 
 from decimal import Decimal
 
-from django.db.models import Count, Q
+from django.db.models import Q
 from rest_framework import serializers
+
+from apps.statistics.retention import with_recent_view_count
 
 from .models import Listing
 
@@ -87,9 +89,7 @@ class ListingCatalogQuerySerializer(serializers.Serializer):
         if "housing_type" in params:
             queryset = queryset.filter(housing_type=params["housing_type"])
         if params.get("ordering") == "popular":
-            return queryset.annotate(view_count=Count("view_events")).order_by(
-                "-view_count", "-id"
-            )
+            return with_recent_view_count(queryset).order_by("-view_count", "-id")
         ordering = {
             "price": ("price_per_night", "id"),
             "-price": ("-price_per_night", "-id"),

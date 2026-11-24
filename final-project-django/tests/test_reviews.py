@@ -11,11 +11,13 @@ from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from drf_spectacular.generators import SchemaGenerator
+from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIClient
 
 from apps.bookings.models import Booking
 from apps.listings.models import City, Listing
 from apps.reviews.models import Review
+from apps.reviews.services import create_review, update_review
 
 User = get_user_model()
 
@@ -93,6 +95,37 @@ class ReviewAPITests(TestCase):
             status=status,
             cancelled_at=timezone.now() if status == Booking.Status.CANCELLED else None,
         )
+
+    def test_direct_create_and_update_reject_whitespace_only_comments(self):
+        for comment in (" ", "\t\n", "\u00a0"):
+            with self.subTest(comment=comment):
+                with self.assertRaises(ValidationError) as caught:
+                    create_review(
+                        actor=self.tenant,
+                        booking_id=self.completed.pk,
+                        rating=5,
+                        comment=comment,
+                    )
+                self.assertIn("comment", caught.exception.detail)
+        self.assertFalse(Review.objects.exists())
+        review = create_review(
+            actor=self.tenant, booking_id=self.completed.pk, rating=5, comment="Good"
+        )
+        for comment in (" ", "\t\n", "\u00a0"):
+            with self.subTest(comment=comment):
+                with self.assertRaises(ValidationError) as caught:
+                    update_review(
+                        actor=self.tenant,
+                        review_id=review.pk,
+                        changes={"comment": comment},
+                    )
+                self.assertIn("comment", caught.exception.detail)
+                review.refresh_from_db()
+                self.assertEqual(review.comment, "Good")
+        updated = update_review(
+            actor=self.tenant, review_id=review.pk, changes={"comment": "Better"}
+        )
+        self.assertEqual(updated.comment, "Better")
 
     def test_create_requires_auth_tenant_role_and_booking_owner(self):
         self.assertEqual(self.create().status_code, 401)

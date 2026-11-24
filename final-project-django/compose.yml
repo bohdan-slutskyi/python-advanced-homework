@@ -65,6 +65,8 @@ services:
       MYSQL_PORT: "3306"
       MYSQL_TEST_DATABASE: ${MYSQL_TEST_DATABASE:-test_housing_rental_compose}
     command: ["python", "manage.py", "test", "tests", "--noinput"]
+    volumes:
+      - ./postman:/app/postman:ro
     depends_on:
       db:
         condition: service_healthy

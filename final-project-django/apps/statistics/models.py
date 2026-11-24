@@ -2,16 +2,23 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
+from django.utils.translation import gettext_lazy as _
 
 
 class SearchEvent(models.Model):
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        verbose_name=_("user"),
     )
-    query_text = models.CharField(max_length=255)
-    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    query_text = models.CharField(_("query text"), max_length=255)
+    created_at = models.DateTimeField(_("created at"), auto_now_add=True, db_index=True)
 
     class Meta:
+        verbose_name = _("search event")
+        verbose_name_plural = _("search events")
         constraints = [
             models.CheckConstraint(
                 condition=~Q(query_text=""), name="search_query_nonempty"
@@ -28,9 +35,20 @@ class SearchEvent(models.Model):
 
 class ViewEvent(models.Model):
     listing = models.ForeignKey(
-        "listings.Listing", on_delete=models.PROTECT, related_name="view_events"
+        "listings.Listing",
+        on_delete=models.PROTECT,
+        related_name="view_events",
+        verbose_name=_("listing"),
     )
     viewer = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        verbose_name=_("viewer"),
     )
-    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    created_at = models.DateTimeField(_("created at"), auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = _("view event")
+        verbose_name_plural = _("view events")

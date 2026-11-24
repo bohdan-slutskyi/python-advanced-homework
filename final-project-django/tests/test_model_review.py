@@ -52,11 +52,11 @@ class ModelReviewTests(TestCase):
             **kwargs,
         )
 
-    def test_booking_today_and_365_night_boundaries_valid(self):
+    def test_booking_tomorrow_and_365_night_boundaries_valid(self):
         today = timezone.localdate()
         for check_in, check_out in (
-            (today, today + timedelta(days=1)),
-            (today, today + timedelta(days=365)),
+            (today + timedelta(days=1), today + timedelta(days=2)),
+            (today + timedelta(days=1), today + timedelta(days=366)),
             (today + timedelta(days=365), today + timedelta(days=366)),
         ):
             with self.subTest(check_in=check_in, check_out=check_out):
@@ -66,6 +66,7 @@ class ModelReviewTests(TestCase):
         today = timezone.localdate()
         for check_in, expected in (
             (today - timedelta(days=1), "check_in"),
+            (today, "check_in"),
             (today + timedelta(days=366), "check_in"),
         ):
             with self.subTest(check_in=check_in):

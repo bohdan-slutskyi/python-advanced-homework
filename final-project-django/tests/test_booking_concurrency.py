@@ -26,7 +26,7 @@ class BookingConcurrencyTests(TransactionTestCase):
             display_name="Owner",
             password="Test12345!safe",
         )
-        self.owner.groups.add(Group.objects.get(name="Landlord"))
+        self.owner.groups.add(Group.objects.get_or_create(name="Landlord")[0])
         first = User.objects.create_user(
             email="race-first@example.com",
             display_name="First",
