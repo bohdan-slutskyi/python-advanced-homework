@@ -78,6 +78,36 @@ class StageFiveTest(TestCase):
         for landlord in User.objects.filter(email__contains="-landlord-"):
             self.assertTrue(landlord.groups.filter(name="Landlord").exists())
 
+    def test_fresh_seed_review_window_and_legacy_calendar_are_stable(self):
+        self.seed(reviews=0)
+        user = get_user_model().objects.get(
+            email="demo-51271-tenant-00000@example.invalid"
+        )
+        booking = Booking.objects.filter(
+            tenant=user,
+            status=Booking.Status.CONFIRMED,
+            check_out__lte=timezone.localdate(),
+        ).first()
+        self.assertEqual((timezone.localdate() - booking.check_out).days, 17)
+        client = APIClient()
+        client.force_authenticate(user)
+        response = client.post(
+            "/api/reviews/",
+            {"booking_id": booking.pk, "rating": 5, "comment": "Fresh seed"},
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        # Simulate a legacy seed: all original slots were 20 days earlier.
+        for b in Booking.objects.all():
+            b.check_in -= timedelta(days=20)
+            b.check_out -= timedelta(days=20)
+            b.save(update_fields=["check_in", "check_out"])
+        before = list(Booking.objects.order_by("pk").values())
+        self.assertIn("bookings=0 new", self.seed(reviews=0))
+        self.assertEqual(list(Booking.objects.order_by("pk").values()), before)
+        with self.assertRaisesMessage(CommandError, "expired review window"):
+            self.seed(reviews=4)
+        self.assertEqual(Review.objects.count(), 1)
+
     def test_seed_repeatable_after_normal_duplicate_searches_and_views(self):
         self.seed()
         user = get_user_model().objects.get(

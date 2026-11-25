@@ -183,15 +183,17 @@ def run(seed, password):
         call("GET", "/api/bookings/?scope=completed", 200, token=tenant)
     )
     expect(bool(completed), "No seeded completed stay; check seed_demo options")
+    earliest_checkout = (today - timedelta(days=30)).isoformat()
     past = next(
         (
             item
             for item in completed
-            if item["check_out"] <= today.isoformat() and item["status"] == "CONFIRMED"
+            if earliest_checkout <= item["check_out"] <= today.isoformat()
+            and item["status"] == "CONFIRMED"
         ),
         None,
     )
-    expect(past is not None, "Expected a completed confirmed booking")
+    expect(past is not None, "Expected an eligible completed stay; use a fresh seed")
     review = call(
         "POST",
         "/api/reviews/",

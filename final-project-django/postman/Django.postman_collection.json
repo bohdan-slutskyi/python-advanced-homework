@@ -941,6 +941,7 @@
               }
             ],
             "url": "{{base_url}}/api/reviews/",
+            "description": "Use an unreviewed confirmed booking with checkout today or up to 30 calendar days ago (Europe/Berlin). Older stays return 400; an existing review can still be edited.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"booking_id\": \"{{completed_booking_id}}\",\n  \"rating\": 5,\n  \"comment\": \"Synthetic stay completed successfully.\"\n}"

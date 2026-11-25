@@ -10,10 +10,21 @@ TEST = """pm.test("HTTP {code}", () => pm.response.to.have.status({code}));
 
 
 def request(
-    name, method, path, *, status=200, body=None, auth="tenant", extra="", pre=""
+    name,
+    method,
+    path,
+    *,
+    status=200,
+    body=None,
+    auth="tenant",
+    extra="",
+    pre="",
+    description="",
 ):
     url = "{{base_url}}" + path
     spec = {"method": method, "header": [], "url": url}
+    if description:
+        spec["description"] = description
     if auth == "public":
         spec["auth"] = {"type": "noauth"}
     elif auth == "landlord":
@@ -313,6 +324,11 @@ collection = {
                     "Create after completed stay",
                     "POST",
                     "/api/reviews/",
+                    description=(
+                        "Use an unreviewed confirmed booking with checkout today or up to "
+                        "30 calendar days ago (Europe/Berlin). Older stays return 400; "
+                        "an existing review can still be edited."
+                    ),
                     status=201,
                     body={
                         "booking_id": "{{completed_booking_id}}",

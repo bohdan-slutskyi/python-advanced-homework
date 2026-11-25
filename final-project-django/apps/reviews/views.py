@@ -54,7 +54,13 @@ class ReviewViewSet(
         return qs.none()
 
     @extend_schema(
-        request=ReviewCreateSerializer, responses={201: ReviewReadSerializer}
+        request=ReviewCreateSerializer,
+        responses={201: ReviewReadSerializer},
+        description=(
+            "Create one review for your confirmed stay from the checkout day through "
+            "30 calendar days after checkout (Europe/Berlin), inclusive. "
+            "An expired deadline returns HTTP 400; existing reviews remain editable."
+        ),
     )
     def create(self, request, *args, **kwargs):
         serializer = ReviewCreateSerializer(data=request.data)

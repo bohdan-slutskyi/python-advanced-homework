@@ -90,7 +90,7 @@ class ReviewAPITests(TestCase):
         return Booking.objects.create(
             listing=self.listing,
             tenant=tenant or self.tenant,
-            check_in=today - timedelta(days=5),
+            check_in=today + timedelta(days=checkout_offset - 5),
             check_out=today + timedelta(days=checkout_offset),
             status=status,
             cancelled_at=timezone.now() if status == Booking.Status.CANCELLED else None,
@@ -155,6 +155,71 @@ class ReviewAPITests(TestCase):
         self.assertEqual(response.data["rating"], 5)
         self.assertNotIn("email", response.data)
         self.assertEqual(Review.objects.count(), 1)
+
+    def test_review_creation_deadline_includes_day_30(self):
+        self.auth(self.tenant)
+        for offset in (0, -29, -30):
+            with self.subTest(offset=offset):
+                booking = self.booking(checkout_offset=offset)
+                response = self.create(booking)
+                self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(Review.objects.count(), 3)
+
+    def test_expired_review_creation_rejected_by_api_and_service(self):
+        self.auth(self.tenant)
+        for offset in (-31, -398):
+            with self.subTest(offset=offset):
+                booking = self.booking(checkout_offset=offset)
+                response = self.create(booking)
+                self.assertEqual(response.status_code, 400, response.data)
+                self.assertIn("booking", response.data)
+                with self.assertRaises(ValidationError) as caught:
+                    create_review(
+                        actor=self.tenant,
+                        booking_id=booking.pk,
+                        rating=5,
+                        comment="Late",
+                    )
+                self.assertIn("booking", caught.exception.detail)
+        self.assertFalse(Review.objects.exists())
+
+    def test_existing_review_remains_editable_after_deadline(self):
+        self.auth(self.tenant)
+        booking = self.booking(checkout_offset=-30)
+        response = self.create(booking)
+        self.assertEqual(response.status_code, 201, response.data)
+        review_id = response.data["id"]
+        tomorrow = timezone.now() + timedelta(days=1)
+        with patch("django.utils.timezone.now", return_value=tomorrow):
+            edited = self.client.patch(f"/api/reviews/{review_id}/", {"rating": 4})
+            self.assertEqual(edited.status_code, 200, edited.data)
+            self.assertEqual(self.create(booking).status_code, 409)
+        self.assertEqual(Review.objects.get(pk=review_id).rating, 4)
+
+    def test_review_deadline_uses_berlin_date_at_utc_midnight(self):
+        self.auth(self.tenant)
+        checkout = datetime(2026, 3, 1).date()
+        with timezone.override("Europe/Berlin"):
+            booking = Booking.objects.create(
+                listing=self.listing,
+                tenant=self.tenant,
+                check_in=checkout - timedelta(days=3),
+                check_out=checkout,
+                status=Booking.Status.CONFIRMED,
+            )
+            # 22:30 UTC on March 31 is April 1 in Berlin (day +31).
+            with patch(
+                "django.utils.timezone.now",
+                return_value=datetime(2026, 3, 31, 22, 30, tzinfo=utc_timezone.utc),
+            ):
+                response = self.create(booking)
+                self.assertEqual(response.status_code, 400, response.data)
+            with patch(
+                "django.utils.timezone.now",
+                return_value=datetime(2026, 3, 31, 21, 30, tzinfo=utc_timezone.utc),
+            ):
+                response = self.create(booking)
+                self.assertEqual(response.status_code, 201, response.data)
 
     def test_nonconfirmed_and_future_stays_are_rejected(self):
         self.auth(self.tenant)

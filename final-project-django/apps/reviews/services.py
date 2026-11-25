@@ -2,6 +2,7 @@
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, OperationalError, transaction
+from django.utils import timezone
 from rest_framework.exceptions import (
     APIException,
     NotFound,
@@ -12,6 +13,8 @@ from rest_framework.exceptions import (
 from apps.bookings.models import Booking
 
 from .models import Review
+
+REVIEW_CREATION_WINDOW_DAYS = 30
 
 
 class ReviewConflict(APIException):
@@ -60,6 +63,15 @@ def create_review(*, actor, booking_id, rating, comment):
         review = Review(booking=booking, rating=rating, comment=comment)
         # Review.clean checks CONFIRMED and Berlin-local checkout; save does not.
         _validate_model(review)
+        # The deadline applies to creation only; an existing review remains editable.
+        if (
+            timezone.localdate() - booking.check_out
+        ).days > REVIEW_CREATION_WINDOW_DAYS:
+            raise ValidationError(
+                {
+                    "booking": f"A review must be created within {REVIEW_CREATION_WINDOW_DAYS} days after checkout."
+                }
+            )
         review.save()
         return review
 

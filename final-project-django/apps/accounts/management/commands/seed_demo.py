@@ -15,6 +15,7 @@ from faker import Faker
 from apps.bookings.models import Booking
 from apps.listings.models import City, District, Listing
 from apps.reviews.models import Review
+from apps.reviews.services import REVIEW_CREATION_WINDOW_DAYS
 from apps.statistics.models import SearchEvent, ViewEvent
 
 
@@ -61,9 +62,9 @@ class Command(BaseCommand):
             .order_by("check_in")
             .first()
         )
-        if prior is not None:
-            # Keep the seed's calendar anchor stable across subsequent days.
-            today = prior.check_in + timedelta(days=40)
+        # Anchor on the first existing stay, preserving the legacy slot spacing.
+        # A fresh seed checks out 17 days ago, within the review creation window.
+        first_check_in = prior.check_in if prior else today - timedelta(days=20)
         # Optional from caller environment, never written into files or output.
         password = os.environ.get("DEMO_USER_PASSWORD")
         groups = {role: Group.objects.get(name=role) for role in ("Tenant", "Landlord")}
@@ -151,7 +152,7 @@ class Command(BaseCommand):
                     Booking.Status.REJECTED,
                     Booking.Status.CANCELLED,
                 )[slot]
-                check_in = today + timedelta(days=(-40, 20, 40, 60, 80)[slot])
+                check_in = first_check_in + timedelta(days=(0, 60, 80, 100, 120)[slot])
                 check_out = check_in + timedelta(days=3)
                 tenant = tenants[i % tenants_n]
                 # A seed's stable listing/slot identifies exactly one sample booking.
@@ -184,6 +185,10 @@ class Command(BaseCommand):
             for i in range(reviews_n):
                 booking = bookings[i]  # First slot is a confirmed past stay.
                 if not Review.objects.filter(booking=booking).exists():
+                    if (today - booking.check_out).days > REVIEW_CREATION_WINDOW_DAYS:
+                        raise CommandError(
+                            "This seed has an expired review window; use a fresh seed."
+                        )
                     review = Review(
                         booking=booking,
                         rating=rng.randint(1, 5),
